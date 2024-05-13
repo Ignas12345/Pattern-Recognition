@@ -134,10 +134,14 @@ class HMM:
         self.stateGen.q = new_q
 
     def updateA(self, alpha, beta, emission_matrix):
+        if self.stateGen.B is None:
+            emission_matrix = emission_matrix
+        else:
+            emission_matrix = self.stateGen.B
         n_states = alpha.shape[0]
         T = alpha.shape[1]
         A_new = np.zeros((n_states, n_states))
-        xi = np.zeros((n_states, n_states, T))
+        xi = np.zeros((n_states, n_states, T-1))
         for i in range(n_states):
             for j in range(n_states):
                 for t in range(T - 1):
@@ -148,41 +152,145 @@ class HMM:
                     xi[i, j ,t] = alpha[i, t] * self.stateGen.A[i, j] * emission_matrix[j][t+1] *  beta[j, t + 1]
         #get xi_{i,j}
         xi_sum = np.sum(xi, axis=2)
-        print("xi_sum ", xi_sum.shape)
         for i in range(n_states):
             total_transitions_from_i = np.sum(xi_sum[i, :])  # Sum over all j for state i
             for j in range(n_states):
                 A_new[i, j] = xi_sum[i, j] / total_transitions_from_i
-        self.stateGen.A = A_new
+        self.stateGen.A = A_new 
     
     def updateB(self, alpha, beta, c, observations):
+        epsilon = 1e-12
         N, T = alpha.shape
         new_means = np.zeros(N)
         new_vars = np.zeros(N)
         gammas = np.zeros((N, T))
-        
-        for t in range(T):
-            gammas[:, t] = (alpha[:, t] * beta[:, t]) / c[t]
-
+        """for j in range(N):
+            for t in range(T):
+                gammas[j,t] = alpha[j, t] * beta[j, t] / (c[t] + epsilon)
         # Update Gaussian parameters for each state
         for i in range(N):
             weighted_observations = gammas[i, :] * observations
             sum_gammas = np.sum(gammas[i, :])
 
             new_means[i] = np.sum(weighted_observations) / sum_gammas 
+
             mean_adjusted_squares = (observations - new_means[i]) ** 2
-            new_vars[i] = np.sum(gammas[i, :] * mean_adjusted_squares) / sum_gammas
+            new_vars[i] = np.sum(gammas[i, :] * mean_adjusted_squares) / sum_gammas"""
+        for t in range(T):
+            norm_factor = np.sum(alpha[:, t] * beta[:, t]) + epsilon  # Normalization factor at time t
+            for j in range(N):
+                gammas[j, t] = alpha[j, t] * beta[j, t] / norm_factor
+        
+            # Update Gaussian parameters for each state using loops
+        for i in range(N):
+            weighted_observations = np.zeros(T)
+            sum_gammas = 0
+
+                # Calculate weighted observations and sum of gammas for state i
+            for t in range(T):
+                weighted_observations[t] = gammas[i, t] * observations[t]
+                sum_gammas += gammas[i, t]
+            
+            new_means[i] = np.sum(weighted_observations) / sum_gammas
+        
+
+            # Compute the new variances for state i
+            mean_adjusted_squares = np.zeros(T)
+            for t in range(T):
+                mean_adjusted_squares[t] = (observations[t] - new_means[i]) ** 2 * gammas[i, t]
+
+            
+            new_vars[i] = np.sum(mean_adjusted_squares) / sum_gammas
         pX = np.zeros((N, T))
         scale_factors = np.zeros(T)
         for k in range(N):
-            distribution = GaussD(means=[new_means[k]], stdevs=[np.sqrt(new_means[i])])
+            distribution = GaussD(means=[new_means[k]], stdevs=[np.sqrt(new_vars[k])])
+            print("means", new_means[k])
+            print("std", np.sqrt(new_vars[k]))
             for t in range(T):
                 pX[k, t] = distribution.prob(observations[t])
-            scale_factors[t] = pX[:, t].max()
-            pX[:, t] /= scale_factors[t]
+            #scale_factors[t] = pX[:, t].max()
+            #pX[:, t] /= scale_factors[t]
         self.stateGen.B = pX
 
-    def train(self, observations, num_iterations=100, ):
-        pass
+    def train(self, observations, initial_pX, num_iterations=4):
+        for iteration in range(num_iterations):
+            #The code is if self.stateGen.B == None use pX else use B
+            alpha_hat, scale_factors = self.stateGen.forward(initial_pX)
+            beta_hat = self.stateGen.backward(scale_factors, initial_pX)
+
+            self.updateA(alpha_hat, beta_hat, initial_pX)
+            print("A-matrix", self.stateGen.A)
+            self.updateB(alpha_hat, beta_hat, scale_factors, observations)
+            print("B-matrix", self.stateGen.B)
+            print(f"Iteration {iteration + 1} complete")
+
+    def viterbi(self, obs):
+        """
+        Viterbi algorithm to find the most probable state sequence given the observation sequence.
+        
+        Parameters:
+            obs (list or array): Sequence of observations.
+        
+        Returns:
+            list: The most probable sequence of states.
+        """
+        N = self.nStates  # Number of states
+        T = len(obs)  # Total number of observations
+        A = self.stateGen.A
+        pi = self.stateGen.q
+        
+        # Log probabilities for numerical stability
+        logA = np.log(A + 1e-12)
+        logB = np.zeros((N, T))
+        for i in range(N):
+            for t in range(T):
+                logB[i, t] = np.log(self.outputDistr[i].prob(obs[t]) + 1e-12)
+
+        logPi = np.log(pi + 1e-12)
+
+        # Initialize the DP arrays
+        V = np.zeros((N, T))
+        path = np.zeros((N, T), dtype=int)
+
+        # Initialize base cases (t == 0)
+        V[:, 0] = logPi + logB[:, 0]
+
+        # Run Viterbi for t > 0
+        for t in range(1, T):
+            for j in range(N):
+                seq_probs = V[:, t-1] + logA[:, j] + logB[j, t]
+                V[j, t] = np.max(seq_probs)
+                path[j, t] = np.argmax(seq_probs)
+
+        # Backtrack
+        states = np.zeros(T, dtype=int)
+        states[-1] = np.argmax(V[:, -1])
+        for t in range(T-2, -1, -1):
+            states[t] = path[states[t+1], t+1]
+
+        return states.tolist()
+
+    def classify_sequence(self, state_sequence):
+        #classify the sequence based on the most likely state sequence. classify the sequence as the most common state in the estimated sequence
+        standing_counter = 0
+        walking_counter = 0
+        running_counter = 0
+        for state in state_sequence:
+            if state == 0:
+                standing_counter += 1
+            elif state == 1:
+                walking_counter += 1
+            elif state == 2:
+                running_counter += 1
+        max_count = max(standing_counter, walking_counter, running_counter)
+        if max_count == standing_counter:
+            print("The sequence is classified as standing!")
+        elif max_count == walking_counter:
+            print("The sequence is classified as walking!")
+        else:
+            print("The sequence is classified as running!")
+        
+
 
     

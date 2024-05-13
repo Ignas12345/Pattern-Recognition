@@ -73,7 +73,9 @@ combined_training_array = np.concatenate([
     walking_train['Absolute acceleration (m/s^2)'].values,
     running_train['Absolute acceleration (m/s^2)'].values
 ])
-
+standing_testdata = standing_test['Absolute acceleration (m/s^2)'].values
+walking_testdata = walking_test['Absolute acceleration (m/s^2)'].values
+running_testdata = running_test['Absolute acceleration (m/s^2)'].values
 """print("combined_training_array", combined_training_array)
 print("combined_training_array shape ", combined_training_array.shape)"""
 
@@ -84,10 +86,13 @@ scale_factors = np.zeros(nSamples)
 for t in range(nSamples):
     for j, g in enumerate([standing_distribution, walking_distribution, running_distribution]):
         pX[j, t] = g.prob(combined_training_array[t])
-    scale_factors[t] = pX[:, t].max()
-    pX[:, t] /= scale_factors[t]
-alpha_hat, c = chain.forward(pX)
-beta_hat = chain.backward(c, pX)
-print(h.stateGen.A)
-h.updateA(alpha_hat, beta_hat, pX)
-print(h.stateGen.A)
+    #scale_factors[t] = pX[:, t].max()
+    #pX[:, t] /= scale_factors[t]
+"""alpha_hat, c = chain.forward(pX)
+beta_hat = chain.backward(c, pX)"""
+
+h.train(combined_training_array, pX)
+seq = h.viterbi(running_testdata)
+h.classify_sequence(seq)
+"""sequence = h.viterbi(combined_training_array)
+print(sequence)"""

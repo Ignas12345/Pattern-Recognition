@@ -132,7 +132,7 @@ class MarkovChain:
     def logprob(self):
         pass
     def forward_logprob(self, pX):
-        if self.B == None:
+        if self.B is None:
             pX = pX
         else:
             pX = self.B
@@ -165,7 +165,7 @@ class MarkovChain:
         epsilon = 1e-12
         #alpha_j,t = P(X1 = x1, ....X_t = x_t, S_t = j| lambda)
         #alpha_hat_j,t = P(S_t = j, X_t = x_t |X1 = x1, ....X_t = x_t, lambda)
-        if self.B == None:
+        if self.B is None:
             pX = pX
         else:
             pX = self.B
@@ -193,7 +193,7 @@ class MarkovChain:
             c[t] = np.sum(alpha_temp)
         
             # Scale alpha_hat for the current time step
-            alpha_hat[:, t] = alpha_temp / c[t]
+            alpha_hat[:, t] = alpha_temp / (c[t]+epsilon)
         if is_finite == True:
             sum_final_alpha = np.sum(alpha_hat[:, -1] * self.A[:, nStates])  # Apply transition to the final state
             c[-1] = sum_final_alpha
@@ -205,11 +205,11 @@ class MarkovChain:
         pass
     
     def backward(self, c, pX, is_finite = False):
-        if self.B == None:
+        if self.B is None:
             pX = pX
         else:
             pX = self.B
-        epsilon = 1e-10
+        epsilon = 1e-12
         nStates = self.nStates
         nSamples = pX.shape[1]
 
@@ -231,7 +231,7 @@ class MarkovChain:
                     sum_products += self.A[i, j] * pX[j, t + 1] * beta_hat[j, t + 1]
                 
                 #Update beta_hat at time t for state i
-                beta_hat[i, t] = sum_products / c[t]
+                beta_hat[i, t] = sum_products / (c[t]+epsilon)
 
         return beta_hat
 
