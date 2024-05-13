@@ -87,7 +87,6 @@ for t in range(nSamples):
     scale_factors[t] = pX[:, t].max()
     pX[:, t] /= scale_factors[t]
 alpha_hat, c = chain.forward(pX)
-print(c)
 beta_hat = chain.backward(c, pX)
 print(h.stateGen.A)
 h.updateA(alpha_hat, beta_hat, pX)

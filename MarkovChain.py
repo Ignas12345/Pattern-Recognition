@@ -16,11 +16,11 @@ class MarkovChain:
     coded as nStates+1.
     The sequence generation stops at S(T), if S(T+1)=(nStates+1)
     """
-    def __init__(self, initial_prob, transition_prob):
+    def __init__(self, initial_prob, transition_prob, emission_prob = None):
 
         self.q = initial_prob  #InitialProb(i)= P[S(1) = i]
         self.A = transition_prob #TransitionProb(i,j)= P[S(t)=j | S(t-1)=i]
-
+        self.B = emission_prob
 
         self.nStates = transition_prob.shape[0]
 
@@ -132,6 +132,10 @@ class MarkovChain:
     def logprob(self):
         pass
     def forward_logprob(self, pX):
+        if self.B == None:
+            pX = pX
+        else:
+            pX = self.B
         nStates = self.nStates
         nSamples = pX.shape[1]
         logAlpha = np.full((nStates, nSamples), -np.inf)  # Initialize with log of zero
@@ -161,6 +165,10 @@ class MarkovChain:
         epsilon = 1e-12
         #alpha_j,t = P(X1 = x1, ....X_t = x_t, S_t = j| lambda)
         #alpha_hat_j,t = P(S_t = j, X_t = x_t |X1 = x1, ....X_t = x_t, lambda)
+        if self.B == None:
+            pX = pX
+        else:
+            pX = self.B
         nStates = self.nStates
         nSamples = pX.shape[1]
         alpha_hat = np.zeros((nStates, nSamples))
@@ -197,6 +205,10 @@ class MarkovChain:
         pass
     
     def backward(self, c, pX, is_finite = False):
+        if self.B == None:
+            pX = pX
+        else:
+            pX = self.B
         epsilon = 1e-10
         nStates = self.nStates
         nSamples = pX.shape[1]

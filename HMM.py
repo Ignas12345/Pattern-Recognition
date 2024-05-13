@@ -141,10 +141,11 @@ class HMM:
         for i in range(n_states):
             for j in range(n_states):
                 for t in range(T - 1):
-                    scaling_factor = emission_matrix[:, t].max()
+                    #scaling_factor = emission_matrix[:, t].max()
                     #sannolikheten att få x_{t+1} men b_j
                     #here i use the scaling factor to get the true probability
-                    xi[i, j ,t] = alpha[i, t] * self.stateGen.A[i, j] * emission_matrix[j][t+1] * scaling_factor * beta[j, t + 1]
+                    #xi[i, j ,t] = alpha[i, t] * self.stateGen.A[i, j] * emission_matrix[j][t+1] * scaling_factor * beta[j, t + 1]
+                    xi[i, j ,t] = alpha[i, t] * self.stateGen.A[i, j] * emission_matrix[j][t+1] *  beta[j, t + 1]
         #get xi_{i,j}
         xi_sum = np.sum(xi, axis=2)
         print("xi_sum ", xi_sum.shape)
@@ -153,4 +154,35 @@ class HMM:
             for j in range(n_states):
                 A_new[i, j] = xi_sum[i, j] / total_transitions_from_i
         self.stateGen.A = A_new
-            
+    
+    def updateB(self, alpha, beta, c, observations):
+        N, T = alpha.shape
+        new_means = np.zeros(N)
+        new_vars = np.zeros(N)
+        gammas = np.zeros((N, T))
+        
+        for t in range(T):
+            gammas[:, t] = (alpha[:, t] * beta[:, t]) / c[t]
+
+        # Update Gaussian parameters for each state
+        for i in range(N):
+            weighted_observations = gammas[i, :] * observations
+            sum_gammas = np.sum(gammas[i, :])
+
+            new_means[i] = np.sum(weighted_observations) / sum_gammas 
+            mean_adjusted_squares = (observations - new_means[i]) ** 2
+            new_vars[i] = np.sum(gammas[i, :] * mean_adjusted_squares) / sum_gammas
+        pX = np.zeros((N, T))
+        scale_factors = np.zeros(T)
+        for k in range(N):
+            distribution = GaussD(means=[new_means[k]], stdevs=[np.sqrt(new_means[i])])
+            for t in range(T):
+                pX[k, t] = distribution.prob(observations[t])
+            scale_factors[t] = pX[:, t].max()
+            pX[:, t] /= scale_factors[t]
+        self.stateGen.B = pX
+
+    def train(self, observations, num_iterations=100, ):
+        pass
+
+    
