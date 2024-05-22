@@ -222,7 +222,7 @@ class HMM:
             self.updateA(alpha_hat, beta_hat, initial_pX)
             print("A-matrix", self.stateGen.A)
             self.updateB(alpha_hat, beta_hat, scale_factors, observations)
-            print("B-matrix", self.stateGen.B)
+            #print("B-matrix", self.stateGen.B)
             print(f"Iteration {iteration + 1} complete")
 
     def viterbi(self, obs):
